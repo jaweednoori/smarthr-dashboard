@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SmartHR Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+    header { background: #1a1a2e; color: white; padding: 1rem 2rem; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 1.4rem; font-weight: 600; }
+    header span { background: #e94560; padding: 3px 10px; border-radius: 20px; font-size: 12px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; padding: 1.5rem 2rem 0; }
+    .stat-card { background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .stat-card .label { font-size: 13px; color: #888; margin-bottom: 6px; }
+    .stat-card .value { font-size: 2rem; font-weight: 700; color: #1a1a2e; }
+    .stat-card .sub { font-size: 12px; color: #aaa; margin-top: 4px; }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: 1rem 2rem; }
+    .chart-card { background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .chart-card h3 { font-size: 14px; font-weight: 600; color: #444; margin-bottom: 1rem; }
+    .table-section { padding: 0 2rem 2rem; }
+    .table-card { background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .table-card h3 { font-size: 14px; font-weight: 600; color: #444; margin-bottom: 1rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 8px 12px; background: #f8f9fa; color: #666; font-weight: 500; border-bottom: 1px solid #eee; }
+    td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; color: #444; }
+    tr:hover td { background: #fafafa; }
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+    .badge.approved { background: #e6f4ea; color: #2e7d32; }
+    .badge.pending { background: #fff8e1; color: #f57f17; }
+    .badge.rejected { background: #fce4ec; color: #c62828; }
+    .loading { text-align: center; padding: 2rem; color: #aaa; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>SmartHR Dashboard</h1>
+  <span>Live</span>
+</header>
+
+<div class="stats">
+  <div class="stat-card">
+    <div class="label">Total Employees</div>
+    <div class="value" id="total-emp">—</div>
+    <div class="sub">Across all departments</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Departments</div>
+    <div class="value" id="total-dept">—</div>
+    <div class="sub">Active teams</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Leave Requests</div>
+    <div class="value" id="total-leave">—</div>
+    <div class="sub">Total submitted</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Pending Approvals</div>
+    <div class="value" id="pending-leave">—</div>
+    <div class="sub">Awaiting action</div>
+  </div>
+</div>
+
+<div class="charts">
+  <div class="chart-card">
+    <h3>Headcount by Department</h3>
+    <canvas id="headcountChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>Leave Request Status</h3>
+    <canvas id="leaveChart"></canvas>
+  </div>
+</div>
+
+<div class="table-section">
+  <div class="table-card">
+    <h3>Recent Employees</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Job Title</th>
+          <th>Department</th>
+          <th>Salary</th>
+        </tr>
+      </thead>
+      <tbody id="emp-table">
+        <tr><td colspan="4" class="loading">Loading employees...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const API = 'http://127.0.0.1:8000';
+
+  async function loadDashboard() {
+    try {
+      const [employees, departments, headcount, leaveSummary] = await Promise.all([
+        fetch(`${API}/employees`).then(r => r.json()),
+        fetch(`${API}/departments`).then(r => r.json()),
+        fetch(`${API}/analytics/headcount`).then(r => r.json()),
+        fetch(`${API}/analytics/leave-summary`).then(r => r.json()),
+      ]);
+
+      // Stat cards
+      document.getElementById('total-emp').textContent = employees.length;
+      document.getElementById('total-dept').textContent = departments.length;
+      const totalLeave = leaveSummary.reduce((a, b) => a + b.count, 0);
+      document.getElementById('total-leave').textContent = totalLeave;
+      const pending = leaveSummary.find(s => s.status === 'pending');
+      document.getElementById('pending-leave').textContent = pending ? pending.count : 0;
+
+      // Headcount chart
+      new Chart(document.getElementById('headcountChart'), {
+        type: 'bar',
+        data: {
+          labels: headcount.map(h => h.department),
+          datasets: [{
+            label: 'Employees',
+            data: headcount.map(h => h.count),
+            backgroundColor: '#4f46e5',
+            borderRadius: 6,
+          }]
+        },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      });
+
+      // Leave pie chart
+      new Chart(document.getElementById('leaveChart'), {
+        type: 'doughnut',
+        data: {
+          labels: leaveSummary.map(s => s.status),
+          datasets: [{
+            data: leaveSummary.map(s => s.count),
+            backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'],
+            borderWidth: 0,
+          }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } } }
+      });
+
+      // Employee table (first 10)
+      const tbody = document.getElementById('emp-table');
+      tbody.innerHTML = employees.slice(0, 10).map(e => `
+        <tr>
+          <td>${e.full_name}</td>
+          <td>${e.job_title}</td>
+          <td>${e.department_id}</td>
+          <td>$${e.salary.toLocaleString()}</td>
+        </tr>
+      `).join('');
+
+    } catch (err) {
+      console.error('API error:', err);
+    }
+  }
+
+  loadDashboard();
+</script>
+</body>
+</html>

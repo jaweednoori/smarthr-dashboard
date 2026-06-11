@@ -2,12 +2,11 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-import models
-import database
-from database import engine, get_db, SessionLocal
+from app import models
+from app.database import engine, get_db, SessionLocal
 from faker import Faker
 import random
-from datetime import date, timedelta
+from datetime import timedelta
 
 models.Base.metadata.create_all(bind=engine)
 
